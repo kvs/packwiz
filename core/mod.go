@@ -129,6 +129,31 @@ func (m Mod) GetFilePath() string {
 	return m.metaFile
 }
 
+// GetUpdateSource returns the name of the mod's primary update source
+// (e.g., "modrinth", "curseforge", "github"). Returns "" if no update source is set.
+// The primary source is determined by the [download] mode:
+//   - "metadata:curseforge" → "curseforge"
+//   - "url" or empty → the first non-curseforge update source,
+//     since curseforge-primary mods always use metadata:curseforge mode.
+func (m Mod) GetUpdateSource() string {
+	// If download mode is "metadata:<source>", that source is primary
+	if strings.HasPrefix(m.Download.Mode, "metadata:") {
+		return strings.TrimPrefix(m.Download.Mode, "metadata:")
+	}
+	// For "url" mode, curseforge is never primary (those use metadata:curseforge)
+	// so return the first non-curseforge source
+	for k := range m.Update {
+		if k != "curseforge" {
+			return k
+		}
+	}
+	// Fallback: return any source
+	for k := range m.Update {
+		return k
+	}
+	return ""
+}
+
 // GetDestFilePath returns the path of the destination file of the mod
 func (m Mod) GetDestFilePath() string {
 	return filepath.Join(filepath.Dir(m.metaFile), filepath.FromSlash(m.FileName))
