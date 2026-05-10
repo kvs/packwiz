@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -55,6 +56,8 @@ func GetPackwizInstallBinFile() (string, error) {
 	return filepath.Join(binPath, exeName), nil
 }
 
+// GetPackwizCache returns the path to the packwiz download cache directory.
+// This can be overridden by setting cache.directory in the config.
 func GetPackwizCache() (string, error) {
 	configuredCache := viper.GetString("cache.directory")
 	if configuredCache != "" {
@@ -65,4 +68,20 @@ func GetPackwizCache() (string, error) {
 		return "", err
 	}
 	return filepath.Join(localStore, "cache"), nil
+}
+
+// GetDepsCacheDir returns the path to the directory for caching mod JARs
+// for dependency resolution. JARs are stored here when they're not available
+// locally and need to be downloaded for deps parsing.
+func GetDepsCacheDir() (string, error) {
+	localStore, err := GetPackwizLocalCache()
+	if err != nil {
+		return "", err
+	}
+	depsDir := filepath.Join(localStore, "deps")
+	err = os.MkdirAll(depsDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to create deps cache directory: %w", err)
+	}
+	return depsDir, nil
 }

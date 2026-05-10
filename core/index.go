@@ -148,6 +148,10 @@ var ignoreDefaults = []string{
 	// Exclude packwiz binaries, if the user puts them in their pack folder
 	"packwiz.exe",
 	"packwiz", // Note: also excludes packwiz/ as a directory - you can negate this pattern if you want a directory called packwiz
+
+	// Exclude packwiz API cache
+	"*.packwiz-cache.json",
+	".packwiz-cache.json",
 }
 
 func readGitignore(path string) (*gitignore.GitIgnore, bool) {

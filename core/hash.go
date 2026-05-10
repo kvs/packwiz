@@ -8,10 +8,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/packwiz/packwiz/curseforge/murmur2"
 	"hash"
+	"io"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/packwiz/packwiz/curseforge/murmur2"
 )
 
 // GetHashImpl gets an implementation of hash.Hash for the given hash type string
@@ -95,4 +98,20 @@ func (h *LengthHasher) BlockSize() int {
 
 func (h *LengthHasher) Reset() {
 	h.length = 0
+}
+
+// HashFile computes the SHA256 hash of a file and returns the hash format and hash string.
+func HashFile(path string) (hashFormat string, hash string, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to open file for hashing: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", "", fmt.Errorf("failed to hash file: %w", err)
+	}
+
+	return "sha256", hex.EncodeToString(h.Sum(nil)), nil
 }

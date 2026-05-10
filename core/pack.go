@@ -30,6 +30,14 @@ type Pack struct {
 	Versions map[string]string                 `toml:"versions"`
 	Export   map[string]map[string]interface{} `toml:"export"`
 	Options  map[string]interface{}            `toml:"options"`
+	Cache    PackCacheConfig                   `toml:"cache"`
+}
+
+type PackCacheConfig struct {
+	// Enabled controls whether API response caching is active.
+	Enabled *bool `toml:"enabled,omitempty"`
+	// File is the path to the cache file, relative to pack.toml.
+	File string `toml:"file,omitempty"`
 }
 
 const CurrentPackFormat = "packwiz:1.1.0"
@@ -221,4 +229,39 @@ func (pack Pack) GetLoaders() (loaders []string) {
 		loaders = append(loaders, "forge")
 	}
 	return
+}
+
+// GetCacheFile returns the path to the API cache file for this pack.
+// Returns empty string if caching is disabled.
+func (pack Pack) GetCacheFile() string {
+	enabled := true // default to enabled
+	if pack.Cache.Enabled != nil {
+		enabled = *pack.Cache.Enabled
+	}
+	if !enabled {
+		return ""
+	}
+	file := pack.Cache.File
+	if file == "" {
+		file = ".packwiz-cache.json"
+	}
+	if filepath.IsAbs(file) {
+		return file
+	}
+	return filepath.Join(filepath.Dir(viper.GetString("pack-file")), file)
+}
+
+// GetDataDir returns the path to the data directory for mirrored mod files.
+// This is where mirrored JARs are stored for self-contained modpacks.
+func (pack Pack) GetDataDir() string {
+	dataDir := ".packwiz-data"
+	if pack.Options != nil {
+		if dir, ok := pack.Options["data-dir"].(string); ok && dir != "" {
+			dataDir = dir
+		}
+	}
+	if filepath.IsAbs(dataDir) {
+		return dataDir
+	}
+	return filepath.Join(filepath.Dir(viper.GetString("pack-file")), dataDir)
 }
