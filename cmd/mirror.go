@@ -13,6 +13,56 @@ import (
 	"github.com/spf13/viper"
 )
 
+// resolveMetadataJar attempts to resolve a metadata-mode mod's JAR through the
+// appropriate MetaDownloader. It handles both automatic downloads and manual
+// downloads (searching pwd and the import cache).
+// Returns ("", nil) if the mod requires manual download and the file isn't found locally,
+// in which case instructions have already been printed.
+func resolveMetadataJar(mod *core.Mod) (string, error) {
+	dlID := strings.TrimPrefix(mod.Download.Mode, "metadata:")
+	downloader, ok := core.MetaDownloaders[dlID]
+	if !ok {
+		return "", fmt.Errorf("unknown metadata downloader %q", dlID)
+	}
+
+	meta, err := downloader.GetFilesMetadata([]*core.Mod{mod})
+	if err != nil {
+		return "", fmt.Errorf("failed to get metadata: %w", err)
+	}
+	if len(meta) == 0 {
+		return "", fmt.Errorf("no metadata returned for %s", mod.Name)
+	}
+
+	isManual, manualDL := meta[0].GetManualDownload()
+	if isManual {
+		// Check if the file is already available locally (pwd, import cache, deps cache)
+		localPath := core.FindManualDownload(mod, manualDL)
+		if localPath != "" {
+			return localPath, nil
+		}
+		// Not found — print instructions and return ("", nil)
+		fmt.Printf("\nMod %q (%s) requires manual download.\n", mod.Name, manualDL.Name)
+		fmt.Printf("  Visit %s to download %s\n", manualDL.URL, manualDL.FileName)
+		fmt.Printf("  Then place the file in the current directory and re-run this command.\n")
+		return "", nil
+	}
+
+	// Automatic download via metadata
+	fmt.Printf("Downloading %s via %s...\n", mod.Name, dlID)
+	reader, err := meta[0].DownloadFile()
+	if err != nil {
+		return "", fmt.Errorf("failed to download: %w", err)
+	}
+	defer reader.Close()
+
+	cachePath, err := core.SaveToDepsCache(mod, reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to cache: %w", err)
+	}
+
+	return cachePath, nil
+}
+
 var mirrorCmd = &cobra.Command{
 	Use:   "mirror <mod-name>",
 	Short: "Mirror a mod's JAR file into the pack data directory",
@@ -115,15 +165,28 @@ func runMirror(cmd *cobra.Command, args []string) {
 	// Find or download the JAR
 	jarPath := core.FindModJar(&mod, pack)
 	if jarPath == "" {
-		if mod.Download.URL == "" && mod.Download.Mode != core.ModeCF && mod.Download.Mode != core.ModeMirror {
+		// JAR not in any cache — try to obtain it
+		if strings.HasPrefix(mod.Download.Mode, "metadata:") {
+			// CurseForge or other metadata-mode mods: try to resolve through the API
+			jarPath, err = resolveMetadataJar(&mod)
+			if err != nil {
+				fmt.Printf("Failed to resolve %s: %v\n", mod.Name, err)
+				os.Exit(1)
+			}
+			if jarPath == "" {
+				// Manual download required and not found locally; instructions were already printed
+				os.Exit(1)
+			}
+		} else if mod.Download.URL != "" {
+			fmt.Printf("Downloading %s...\n", mod.Name)
+			jarPath, err = core.DownloadModJar(&mod)
+			if err != nil {
+				fmt.Printf("Failed to download %s: %v\n", mod.Name, err)
+				os.Exit(1)
+			}
+		} else {
 			fmt.Printf("Mod %q has no download URL and JAR is not available locally.\n", mod.Name)
-			fmt.Println("Try running \"packwiz refresh\" first to download mod files, or check that the mod has a valid download URL.")
-			os.Exit(1)
-		}
-		fmt.Printf("Downloading %s...\n", mod.Name)
-		jarPath, err = core.DownloadModJar(&mod)
-		if err != nil {
-			fmt.Printf("Failed to download %s: %v\n", mod.Name, err)
+			fmt.Println("Make sure the mod is installed (run \"packwiz refresh\" first), or place the JAR file in the current directory.")
 			os.Exit(1)
 		}
 	}
@@ -213,9 +276,8 @@ func runMirror(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Add data directory to .gitignore
-	gitignorePath := filepath.Join(filepath.Dir(viper.GetString("pack-file")), ".gitignore")
-	addToGitignore(gitignorePath, ".packwiz-data/")
+	// The data directory is tracked in index.toml and should be committed to git
+	// so the modpack is self-contained and can be served by packwiz serve.
 
 	fmt.Printf("\nSuccessfully mirrored %s!\n", mod.Name)
 	fmt.Printf("Data file: %s\n", destPath)
@@ -331,34 +393,4 @@ func copyJARFile(src, dst string) error {
 		return err
 	}
 	return nil
-}
-
-// addToGitignore appends a line to the .gitignore file if it doesn't already contain it.
-func addToGitignore(gitignorePath, line string) {
-	data, err := os.ReadFile(gitignorePath)
-	if err != nil && !os.IsNotExist(err) {
-		return
-	}
-
-	content := ""
-	if err == nil {
-		content = string(data)
-	}
-
-	for _, existingLine := range strings.Split(content, "\n") {
-		if strings.TrimSpace(existingLine) == strings.TrimSpace(line) {
-			return
-		}
-	}
-
-	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
-		f.WriteString("\n")
-	}
-	f.WriteString(line + "\n")
 }

@@ -792,7 +792,7 @@ func FindAllJars(mods []*Mod, pack Pack, cacheJars bool) (jarPaths map[string]st
 				isManual, manualDL := meta[i].GetManualDownload()
 				if isManual {
 					// Try to find the file locally before asking the user
-					localPath := findManualDownload(mod, manualDL)
+					localPath := FindManualDownload(mod, manualDL)
 					if localPath != "" {
 						jarPaths[mod.GetFilePath()] = localPath
 						downloadCount++
@@ -817,7 +817,7 @@ func FindAllJars(mods []*Mod, pack Pack, cacheJars bool) (jarPaths map[string]st
 				}
 
 				// Save to deps cache
-				cachePath, err := saveToDepsCache(mod, reader)
+				cachePath, err := SaveToDepsCache(mod, reader)
 				reader.Close()
 				if err != nil {
 					fmt.Printf("    Warning: failed to cache %s: %v\n", mod.Name, err)
@@ -836,10 +836,10 @@ func FindAllJars(mods []*Mod, pack Pack, cacheJars bool) (jarPaths map[string]st
 	return jarPaths, missingCount, downloadCount
 }
 
-// saveToDepsCache saves a downloaded JAR to the deps cache.
+// SaveToDepsCache saves a downloaded JAR to the deps cache.
 // It saves the file using both the hash-based path (for exact matching) and
 // the original filename (for fallback lookup when hash paths differ).
-func saveToDepsCache(mod *Mod, content io.ReadCloser) (string, error) {
+func SaveToDepsCache(mod *Mod, content io.ReadCloser) (string, error) {
 	cacheDir, err := GetDepsCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get deps cache dir: %w", err)
@@ -895,7 +895,7 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// findManualDownload looks for a manually-downloaded JAR file for mods that
+// FindManualDownload looks for a manually-downloaded JAR file for mods that
 // require manual download (e.g. CurseForge mods with no distribution permission).
 // It checks:
 // 1. The deps cache (already processed)
@@ -903,7 +903,7 @@ func fileExists(path string) bool {
 // 3. The current working directory
 // If found, the file is copied to the deps cache and the cache path is returned.
 // If not found, returns empty string.
-func findManualDownload(mod *Mod, manualDL ManualDownload) string {
+func FindManualDownload(mod *Mod, manualDL ManualDownload) string {
 	cacheDir, _ := GetDepsCacheDir()
 	downloadCache, _ := GetPackwizCache()
 
