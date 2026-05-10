@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/unascribed/FlexVer/go/flexver"
@@ -290,6 +291,7 @@ func findLatestFile(modInfoData modInfo, mcVersions []string, packLoaders []stri
 	cfMcVersions := getCurseforgeVersions(mcVersions)
 	bestMcVer := -1
 	bestLoaderType := modloaderTypeAny
+	bestDate := time.Time{}
 
 	// For snapshots, curseforge doesn't put them in GameVersionLatestFiles
 	for _, v := range modInfoData.LatestFiles {
@@ -311,8 +313,13 @@ func findLatestFile(modInfoData modInfo, mcVersions []string, packLoaders []stri
 			}
 		}
 		if compare == 0 {
-			// Other comparisons are equal, compare by ID instead
-			compare = int32(int64(v.ID) - int64(fileID))
+			// Prefer more recent file dates over older ones
+			if v.Date.After(bestDate) {
+				compare = 1
+			} else if v.Date.Equal(bestDate) {
+				// Same date: prefer higher file ID as final tiebreaker
+				compare = int32(int64(v.ID) - int64(fileID))
+			}
 		}
 		if compare > 0 {
 			fileID = v.ID
@@ -321,6 +328,7 @@ func findLatestFile(modInfoData modInfo, mcVersions []string, packLoaders []stri
 			fileName = v.FileName
 			bestMcVer = mcVerIdx
 			bestLoaderType = loaderIdx
+			bestDate = v.Date
 		}
 	}
 	// TODO: manage alpha/beta/release correctly, check update channel?
@@ -343,7 +351,7 @@ func findLatestFile(modInfoData modInfo, mcVersions []string, packLoaders []stri
 			}
 		}
 		if compare == 0 {
-			// Other comparisons are equal, compare by ID instead
+			// GameVersionLatestFiles don't have dates, so fall back to file ID
 			compare = int32(int64(v.ID) - int64(fileID))
 		}
 		if compare > 0 {
