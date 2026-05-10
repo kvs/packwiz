@@ -233,7 +233,12 @@ func parseSlugOrUrl(input string, slug *string, version *string, versionID *stri
 	return
 }
 
-func compareLoaderLists(a []string, b []string) int32 {
+func compareLoaderLists(a []string, b []string, relevantLoaders []string) int32 {
+	// Filter both loader lists to only include loaders relevant to the pack,
+	// as irrelevant loaders (e.g., fabric in a neoforge-only pack) would
+	// incorrectly influence the comparison.
+	a = filterRelevantLoaders(a, relevantLoaders)
+	b = filterRelevantLoaders(b, relevantLoaders)
 	var compat []string
 	for k, v := range loaderCompatGroups {
 		if slices.Contains(a, k) && slices.Contains(b, k) {
@@ -273,7 +278,20 @@ func compareLoaderLists(a []string, b []string) int32 {
 	return 0
 }
 
-func findLatestVersion(versions []*modrinthApi.Version, gameVersions []string, useFlexVer bool) *modrinthApi.Version {
+// filterRelevantLoaders filters a version's loader list to only include loaders
+// relevant to the pack (the same set of loaders sent to the Modrinth API).
+// This prevents irrelevant loaders from affecting version comparison.
+func filterRelevantLoaders(versionLoaders []string, relevantLoaders []string) []string {
+	var filtered []string
+	for _, l := range versionLoaders {
+		if slices.Contains(relevantLoaders, l) {
+			filtered = append(filtered, l)
+		}
+	}
+	return filtered
+}
+
+func findLatestVersion(versions []*modrinthApi.Version, gameVersions []string, useFlexVer bool, relevantLoaders []string) *modrinthApi.Version {
 	latestValidVersion := versions[0]
 	bestGameVersion := core.HighestSliceIndex(gameVersions, versions[0].GameVersions)
 	for _, v := range versions[1:] {
@@ -290,7 +308,7 @@ func findLatestVersion(versions []*modrinthApi.Version, gameVersions []string, u
 			compare = int32(gameVersionIdx - bestGameVersion)
 		}
 		if compare == 0 {
-			compare = compareLoaderLists(latestValidVersion.Loaders, v.Loaders)
+			compare = compareLoaderLists(latestValidVersion.Loaders, v.Loaders, relevantLoaders)
 		}
 		if compare == 0 {
 			// Other comparisons are equal, compare date instead
@@ -333,8 +351,8 @@ func getLatestVersion(projectID string, name string, pack core.Pack) (*modrinthA
 
 	// TODO: option to always compare using flexver?
 	// TODO: ask user which one to use?
-	flexverLatest := findLatestVersion(result, gameVersions, true)
-	releaseDateLatest := findLatestVersion(result, gameVersions, false)
+	flexverLatest := findLatestVersion(result, gameVersions, true, loaders)
+	releaseDateLatest := findLatestVersion(result, gameVersions, false, loaders)
 	if flexverLatest != releaseDateLatest && releaseDateLatest.VersionNumber != nil && flexverLatest.VersionNumber != nil {
 		fmt.Printf("Warning: Modrinth versions for %s inconsistent between latest version number and newest release date (%s vs %s)\n", name, *flexverLatest.VersionNumber, *releaseDateLatest.VersionNumber)
 	}
