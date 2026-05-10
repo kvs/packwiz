@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"os"
 
 	"github.com/packwiz/packwiz/core"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // refreshCmd represents the refresh command
@@ -52,6 +52,7 @@ var refreshCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
 		fmt.Println("Index refreshed!")
 	},
 }
