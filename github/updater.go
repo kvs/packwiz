@@ -82,15 +82,67 @@ func (u ghUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 
 		newFile := newFiles[0]
 
-		results[i] = core.UpdateCheck{
-			UpdateAvailable: true,
-			UpdateString:    mod.FileName + " -> " + newFile.Name,
-			CachedState:     cachedStateStore{data.Slug, newRelease},
-			NewVersionID:    newRelease.TagName,
-		}
+	// Build cumulative changelog from all releases between installed tag and latest
+	changelog := buildGitHubChangelog(data.Slug, data.Tag, newRelease)
+
+	results[i] = core.UpdateCheck{
+		UpdateAvailable: true,
+		UpdateString:    mod.FileName + " -> " + newFile.Name,
+		Changelog:       changelog,
+		CachedState:     cachedStateStore{data.Slug, newRelease},
+		NewVersionID:    newRelease.TagName,
+	}
 	}
 
 	return results, nil
+}
+
+// buildGitHubChangelog constructs a cumulative changelog from all GitHub releases
+// between oldTag and newRelease. If no cumulative changelog can be built, falls
+// back to the new release's body.
+func buildGitHubChangelog(slug, oldTag string, newRelease Release) string {
+	owner, repo, found := strings.Cut(slug, "/")
+	if !found {
+		return newRelease.Body
+	}
+
+	releases, err := FetchAllReleaseChangelogs(owner, repo, 30)
+	if err != nil || len(releases) == 0 {
+		return newRelease.Body
+	}
+
+	// Find the index of the currently installed tag
+	oldIdx := -1
+	for i, r := range releases {
+		if r.TagName == oldTag {
+			oldIdx = i
+			break
+		}
+	}
+
+	if oldIdx == -1 {
+		return newRelease.Body
+	}
+
+	if oldIdx == 0 {
+		return ""
+	}
+
+	// Collect releases from 0 (newest) to oldIdx (installed version),
+	// skipping the installed version itself.
+	var parts []string
+	for i := 0; i < oldIdx; i++ {
+		body := strings.TrimSpace(releases[i].Body)
+		if body != "" {
+			parts = append(parts, fmt.Sprintf("--- %s ---\n%s", releases[i].TagName, body))
+		}
+	}
+
+	if len(parts) == 0 {
+		return newRelease.Body
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 func (u ghUpdater) DoUpdate(mods []*core.Mod, cachedState []interface{}) error {

@@ -150,7 +150,7 @@ func installViaSearch(query string, versionFilename string, autoAcceptFirst bool
 
 	fmt.Println("Searching Modrinth...")
 
-	results, err := getProjectIdsViaSearch(query, mcVersions)
+	results, err := GetProjectIdsViaSearch(query, mcVersions)
 	if err != nil {
 		return err
 	}

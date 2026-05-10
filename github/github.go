@@ -60,6 +60,7 @@ type Release struct {
 	TagName         string  `json:"tag_name"`
 	TargetCommitish string  `json:"target_commitish"` // The branch of the release
 	Name            string  `json:"name"`
+	Body            string  `json:"body"`
 	CreatedAt       string  `json:"created_at"`
 	Assets          []Asset `json:"assets"`
 }

@@ -47,7 +47,7 @@ func (u mrUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 
 		data := rawData.(mrUpdateData)
 
-		newVersion, err := getLatestVersion(data.ProjectID, mod.Name, pack)
+		newVersion, allVersions, err := getLatestVersionWithList(data.ProjectID, mod.Name, pack)
 		if err != nil {
 			results[i] = core.UpdateCheck{Error: fmt.Errorf("failed to get latest version: %v", err)}
 			continue
@@ -71,9 +71,22 @@ func (u mrUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 			}
 		}
 
+		// Build cumulative changelog from all versions between installed and latest
+		var changelog string
+		if newVersion.Changelog != nil {
+			changelog = *newVersion.Changelog
+		}
+		if allVersions != nil {
+			cumulative := buildCumulativeChangelog(allVersions, mod.FileName)
+			if cumulative != "" {
+				changelog = cumulative
+			}
+		}
+
 		results[i] = core.UpdateCheck{
 			UpdateAvailable: true,
 			UpdateString:    mod.FileName + " -> " + *newFilename,
+			Changelog:       changelog,
 			CachedState:     cachedStateStore{data.ProjectID, newVersion},
 			NewVersionID:    *newVersion.ID,
 		}

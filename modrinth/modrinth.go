@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 
 	modrinthApi "codeberg.org/jmansfield/go-modrinth/modrinth"
 	"github.com/packwiz/packwiz/cmd"
@@ -32,7 +33,7 @@ func init() {
 	mrDefaultClient.UserAgent = core.UserAgent
 }
 
-func getProjectIdsViaSearch(query string, versions []string) ([]*modrinthApi.SearchResult, error) {
+func GetProjectIdsViaSearch(query string, versions []string) ([]*modrinthApi.SearchResult, error) {
 	facets := make([]string, 0)
 	for _, v := range versions {
 		facets = append(facets, "versions:"+v)
@@ -360,6 +361,89 @@ func getLatestVersion(projectID string, name string, pack core.Pack) (*modrinthA
 	return releaseDateLatest, nil
 }
 
+// getLatestVersionWithList is like getLatestVersion but also returns the full version list
+// so that cumulative changelogs can be built.
+func getLatestVersionWithList(projectID string, name string, pack core.Pack) (*modrinthApi.Version, []*modrinthApi.Version, error) {
+	gameVersions, err := pack.GetSupportedMCVersions()
+	if err != nil {
+		return nil, nil, err
+	}
+	var loaders []string
+	if viper.GetString("datapack-folder") != "" {
+		loaders = append(pack.GetCompatibleLoaders(), withDatapackPathMRLoaders...)
+	} else {
+		loaders = append(pack.GetCompatibleLoaders(), defaultMRLoaders...)
+	}
+
+	result, err := mrDefaultClient.Versions.ListVersions(projectID, modrinthApi.ListVersionsOptions{
+		GameVersions: gameVersions,
+		Loaders:      loaders,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch latest version: %w", err)
+	}
+	if len(result) == 0 {
+		return nil, nil, errors.New("no valid versions found")
+	}
+
+	flexverLatest := findLatestVersion(result, gameVersions, true, loaders)
+	releaseDateLatest := findLatestVersion(result, gameVersions, false, loaders)
+	if flexverLatest != releaseDateLatest && releaseDateLatest.VersionNumber != nil && flexverLatest.VersionNumber != nil {
+		fmt.Printf("Warning: Modrinth versions for %s inconsistent between latest version number and newest release date (%s vs %s)\n", name, *flexverLatest.VersionNumber, *releaseDateLatest.VersionNumber)
+	}
+
+	return releaseDateLatest, result, nil
+}
+
+// buildCumulativeChangelog builds a combined changelog from all Modrinth versions
+// between the currently installed version and the latest. If no installed version
+// can be matched, returns "" so the caller can fall back to a single version changelog.
+func buildCumulativeChangelog(versions []*modrinthApi.Version, oldFilename string) string {
+	if len(versions) == 0 || oldFilename == "" {
+		return ""
+	}
+
+	// Find the index of the currently installed version
+	startIdx := -1
+	for i, v := range versions {
+		if v.VersionNumber != nil && core.MatchVersionString(*v.VersionNumber, oldFilename) {
+			startIdx = i
+			break
+		}
+	}
+
+	// If we can't find the installed version, return "" to let the caller fall back
+	if startIdx == -1 {
+		return ""
+	}
+
+	// If installed is already the latest, no changelog needed
+	if startIdx == 0 {
+		return ""
+	}
+
+	// Collect changelogs from versions AFTER the installed one, up to the latest
+	var parts []string
+	for i := 0; i < startIdx; i++ {
+		v := versions[i]
+		if v.Changelog != nil && strings.TrimSpace(*v.Changelog) != "" {
+			var header string
+			if v.VersionNumber != nil {
+				header = fmt.Sprintf("--- %s ---", *v.VersionNumber)
+			} else if v.Name != nil {
+				header = fmt.Sprintf("--- %s ---", *v.Name)
+			}
+			part := header + "\n" + strings.TrimSpace(*v.Changelog)
+			parts = append(parts, part)
+		}
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 func getSide(mod *modrinthApi.Project) string {
 	server := shouldDownloadOnSide(*mod.ServerSide)
 	client := shouldDownloadOnSide(*mod.ClientSide)
@@ -468,4 +552,39 @@ func mapDepOverride(depID string, isQuilt bool, mcVersion string) string {
 		}
 	}
 	return depID
+}
+
+// FetchChangelog retrieves the changelog for the latest version of a Modrinth project
+func FetchChangelog(projectID string, name string, pack core.Pack) (string, error) {
+	version, err := getLatestVersion(projectID, name, pack)
+	if err != nil {
+		return "", fmt.Errorf("failed to get latest version: %w", err)
+	}
+	if version.Changelog != nil {
+		return *version.Changelog, nil
+	}
+	return "", nil
+}
+
+// FetchCumulativeChangelog fetches changelogs for all Modrinth versions between the
+// currently installed version and the latest version. oldVersion is a version string
+// (e.g. a filename) that we try to match against Modrinth version names/numbers.
+// Returns a combined changelog string, or the latest version's changelog if matching fails.
+func FetchCumulativeChangelog(projectID string, name string, oldVersion string, pack core.Pack) (string, error) {
+	_, allVersions, err := getLatestVersionWithList(projectID, name, pack)
+	if err != nil {
+		return "", err
+	}
+
+	// Try cumulative changelog with version matching
+	cumulative := buildCumulativeChangelog(allVersions, oldVersion)
+	if cumulative != "" {
+		return cumulative, nil
+	}
+
+	// Fall back to just the latest version's changelog
+	if len(allVersions) > 0 && allVersions[0].Changelog != nil && *allVersions[0].Changelog != "" {
+		return *allVersions[0].Changelog, nil
+	}
+	return "", nil
 }
