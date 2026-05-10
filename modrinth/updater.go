@@ -75,6 +75,7 @@ func (u mrUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 			UpdateAvailable: true,
 			UpdateString:    mod.FileName + " -> " + *newFilename,
 			CachedState:     cachedStateStore{data.ProjectID, newVersion},
+			NewVersionID:    *newVersion.ID,
 		}
 	}
 

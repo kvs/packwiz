@@ -440,6 +440,7 @@ func (u cfUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 				UpdateAvailable: true,
 				UpdateString:    v.FileName + " -> " + fileName,
 				CachedState:     cachedStateStore{modInfos[i], fileID, fileInfoData},
+				NewVersionID:    fmt.Sprintf("%d", fileID),
 			}
 		} else {
 			// Could not find a file, too old, or up to date: no update available

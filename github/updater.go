@@ -86,6 +86,7 @@ func (u ghUpdater) CheckUpdate(mods []*core.Mod, pack core.Pack) ([]core.UpdateC
 			UpdateAvailable: true,
 			UpdateString:    mod.FileName + " -> " + newFile.Name,
 			CachedState:     cachedStateStore{data.Slug, newRelease},
+			NewVersionID:    newRelease.TagName,
 		}
 	}
 

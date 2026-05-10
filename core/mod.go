@@ -22,6 +22,9 @@ type Mod struct {
 	// Update is a map of map of stuff, so you can store arbitrary values on string keys to define updating
 	Update     map[string]map[string]interface{} `toml:"update"`
 	updateData map[string]interface{}
+	// SkipVersions stores version IDs that should be skipped during updates.
+	// This is useful for skipping beta/alpha releases without pinning the mod.
+	SkipVersions []string `toml:"skip-versions,omitempty"`
 
 	Option *ModOption `toml:"option,omitempty"`
 }

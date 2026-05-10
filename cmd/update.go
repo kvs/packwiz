@@ -77,6 +77,21 @@ var UpdateCmd = &cobra.Command{
 							continue
 						}
 
+						// Check if the new version is in the skip list
+						skipped := false
+						if check.NewVersionID != "" {
+							for _, sv := range v[i].SkipVersions {
+								if sv == check.NewVersionID {
+									fmt.Printf("Update skipped for %s (version %s is in skip list)\n", v[i].Name, check.NewVersionID)
+									skipped = true
+									break
+								}
+							}
+						}
+						if skipped {
+							continue
+						}
+
 						if !updatesFound {
 							fmt.Println("Updates found:")
 							updatesFound = true
@@ -160,6 +175,21 @@ var UpdateCmd = &cobra.Command{
 			}
 
 			if check[0].UpdateAvailable {
+				// Check if the new version is in the skip list
+				skipped := false
+				if check[0].NewVersionID != "" {
+					for _, sv := range modData.SkipVersions {
+						if sv == check[0].NewVersionID {
+							fmt.Printf("Update skipped for %s (version %s is in skip list)\n", modData.Name, check[0].NewVersionID)
+							skipped = true
+							break
+						}
+					}
+				}
+				if skipped {
+					fmt.Printf("\"%s\" is up to date (update version is in skip list)!\n", modData.Name)
+					return
+				}
 				fmt.Printf("Update available: %s\n", check[0].UpdateString)
 
 				err = updater.DoUpdate([]*core.Mod{&modData}, []interface{}{check[0].CachedState})

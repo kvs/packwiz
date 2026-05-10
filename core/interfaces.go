@@ -27,6 +27,9 @@ type UpdateCheck struct {
 	UpdateString string
 	// CachedState can be used to preserve per-mod state between CheckUpdate and DoUpdate (e.g. file metadata)
 	CachedState interface{}
+	// NewVersionID stores the version identifier of the new version for skip-version tracking.
+	// For Modrinth: the version ID. For CurseForge: the file ID. For GitHub: the tag name.
+	NewVersionID string
 	// Error stores an error for this specific mod
 	// Errors can also be returned from CheckUpdate directly, if the whole operation failed completely (so only 1 error is printed)
 	// If an error is returned for a mod, or from CheckUpdate, DoUpdate is not called on that mod / at all
